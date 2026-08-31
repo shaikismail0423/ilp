@@ -1,0 +1,6 @@
+streamlit>=1.30.0
+networkx>=3.1
+matplotlib>=3.7.0
+# Optional but recommended - the benchmark's t-test / Wilcoxon test falls
+# back to pure-Python implementations when scipy is missing.
+scipy>=1.10.0
