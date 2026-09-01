@@ -124,10 +124,19 @@ class Architecture:
         return [c.id for c in self.components]
 
     def signature(self) -> str:
-        """Hashable identifier used for de-duplication in the beam."""
+        """Hashable identifier used for de-duplication in the beam.
+
+        For layered architectures, component ids WITHIN a layer are sorted so
+        that two DAGs which differ only in the order of parallel branches
+        (e.g. [A|B|C] vs [B|A|C]) hash to the same signature. Layer ORDER is
+        preserved because it defines the pipeline's sequential structure.
+        """
         if self.layers is None:
             return "->".join(self.ids())
-        return " ~> ".join("+".join(c.id for c in layer) for layer in self.layers)
+        return " ~> ".join(
+            "+".join(sorted(c.id for c in layer))
+            for layer in self.layers
+        )
 
     def last_output(self) -> Optional[str]:
         if self.layers is not None and self.layers:

@@ -72,6 +72,7 @@ def inflate_to_dag(
     cons: Constraints,
     max_width: int = 3,
     enable_hierarchy: bool = True,
+    widen_types: Optional[set] = None,
 ) -> Architecture:
     """Return a DAG-shaped :class:`Architecture` derived from ``chain``.
 
@@ -100,9 +101,15 @@ def inflate_to_dag(
     # original order, looking up each component's *current* index in the
     # (possibly mutated) layers list on the fly. This avoids the pitfall
     # of iterating with enumerate() over a list we are mutating.
+    # widen_types restricts widening to a subset of component types.
+    # If None (default), all _PARALLELIZABLE_TYPES may be widened.
+    allowed_types = widen_types if widen_types is not None else _PARALLELIZABLE_TYPES
+
     original = list(chain.components)
     for comp in original:
         if comp.type not in _PARALLELIZABLE_TYPES:
+            continue
+        if comp.type not in allowed_types:
             continue
         # Under hierarchy mode, validation may be widened independently to
         # form a validator ensemble even without prior reasoning widening —

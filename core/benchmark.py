@@ -174,22 +174,36 @@ def run_benchmark(
     rl_episodes: int = 300,
     seed: int = 42,
 ) -> BenchmarkReport:
-    """Run every engine on every task, then compute pairwise statistics."""
+    """Run every engine on every task, then compute pairwise statistics.
+
+    Each stochastic engine (MCTS, RL) receives a *per-task* seed so their
+    exploration genuinely varies across tasks — otherwise every engine
+    converges to the same global optimum and the benchmark is uninformative.
+    """
     tasks_bpi = generate_tasks(n=n_tasks, seed=seed)
 
-    engines: Dict[str, Callable[[BPITask], Optional[Architecture]]] = {
-        "Beam Search": lambda bpi: (
-            beam_search(repo, _bpi_to_task(bpi), cons,
-                        beam_width=beam_width, top_k=1)[:1] or [None]
-        )[0],
-        "MCTS": lambda bpi: (
-            mcts_search(repo, _bpi_to_task(bpi), cons,
-                        iterations=mcts_iterations, top_k=1)[:1] or [None]
-        )[0],
-        "Reinforcement Learning": lambda bpi: (
-            rl_search(repo, _bpi_to_task(bpi), cons,
-                      episodes=rl_episodes, top_k=1)[:1] or [None]
-        )[0],
+    def _mk(engine_name: str):
+        def build(bpi_idx: int, bpi: BPITask) -> Optional[Architecture]:
+            task = _bpi_to_task(bpi)
+            if engine_name == "Beam Search":
+                # Deterministic — always finds the analytical optimum.
+                r = beam_search(repo, task, cons, beam_width=beam_width, top_k=1)
+            elif engine_name == "MCTS":
+                # Different seed per task so exploration varies task-to-task.
+                r = mcts_search(repo, task, cons,
+                                iterations=mcts_iterations, top_k=1,
+                                seed=seed + bpi_idx * 101)
+            else:  # RL
+                r = rl_search(repo, task, cons,
+                              episodes=rl_episodes, top_k=1,
+                              seed=seed + bpi_idx * 211)
+            return (r[:1] or [None])[0]
+        return build
+
+    engines: Dict[str, Callable[[int, BPITask], Optional[Architecture]]] = {
+        "Beam Search":            _mk("Beam Search"),
+        "MCTS":                   _mk("MCTS"),
+        "Reinforcement Learning": _mk("Reinforcement Learning"),
     }
 
     per_engine_success: Dict[str, List[float]] = {}
@@ -202,7 +216,7 @@ def run_benchmark(
         example_pipeline: List[str] = []
 
         for i, bpi in enumerate(tasks_bpi):
-            arch = builder(bpi)
+            arch = builder(i, bpi)
             if arch is None or not arch.components:
                 per_task.append({"success_rate": 0.0, "latency": 0.0,
                                  "cost": 0.0, "memory": 0})

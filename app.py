@@ -13,7 +13,6 @@ import streamlit as st
 from core.beam_search import beam_search
 from core.mcts_search import mcts_search
 from core.rl_search import rl_search
-from core.benchmark import run_benchmark
 from core.dag_inflater import inflate_to_dag
 from core.agentic_wrapper import wrap_in_agentic_scaffold, is_valid_architecture
 from core.explainer import explain_alternative, explain_best
@@ -30,7 +29,7 @@ st.set_page_config(
     page_title="AutoAgentSearch",
     page_icon="◆",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 REPO_PATH = os.path.join(os.path.dirname(__file__), "components")
 
@@ -82,6 +81,23 @@ st.markdown(
   }
 
   /* Sidebar stays open on page load (initial_sidebar_state="expanded") */
+
+  /* Hide Streamlit's leaked Material-Icons text ("keyboard_double_arrow_left")
+     that appears when the icon font hasn't loaded. The icon element carries
+     the Google Material class; we hide the raw text but keep the button. */
+  [data-testid="stSidebar"] .material-symbols-outlined,
+  [data-testid="stSidebar"] span[data-testid="stIconMaterial"],
+  [data-testid="collapsedControl"] .material-symbols-outlined,
+  [data-testid="stSidebarCollapseButton"] .material-symbols-outlined {
+    font-size: 0 !important;
+    color: transparent !important;
+    visibility: hidden !important;
+  }
+  /* Restore an icon shape (chevron) so the button is still tappable */
+  [data-testid="stSidebarCollapseButton"] button,
+  [data-testid="collapsedControl"] button {
+    color: var(--muted) !important;
+  }
 
   /* Font family only — never override colour globally, it breaks widgets */
   html, body, [class*="css"], [class*="st-"]  {
@@ -158,6 +174,44 @@ st.markdown(
   .lede {
     font-size: 1.05rem; color: var(--muted); line-height: 1.5;
     max-width: 680px; margin: 0 0 1.4rem 0;
+  }
+
+  /* ---------- COMPACT METRIC COLUMN (for side-by-side results) ---------- */
+  .mc-box {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.5rem 0.9rem;
+    margin-top: 0.7rem;
+  }
+  .mc-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--border-2);
+  }
+  .mc-row:last-child { border-bottom: none; }
+  .mc-k {
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .mc-v {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.95rem;
+    color: var(--fg-strong);
+    font-weight: 600;
+  }
+
+  /* ---------- CONFIG COLUMN TITLE ---------- */
+  .cfg-title {
+    font-size: 0.85rem; font-weight: 700; color: var(--fg-strong);
+    letter-spacing: -0.01em;
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.8rem;
+    border-bottom: 1px solid var(--border);
   }
 
   /* ---------- SECTION LABEL ---------- */
@@ -453,73 +507,21 @@ st.markdown(
 
 
 # =============================================================================
-# SIDEBAR
-# =============================================================================
-with st.sidebar:
-    st.markdown(
-        '<div class="side-brand"><span class="side-brand-mark">◆</span> AutoAgentSearch</div>'
-        '<div class="side-caption">v3 · Research prototype</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown('<div class="side-group">Task Domain</div>', unsafe_allow_html=True)
-    _user_domains = [d for d in repo.domains() if d != "agentic"]
-    domain = st.selectbox(
-        "Domain",
-        ["auto"] + _user_domains,
-        index=0,
-        label_visibility="collapsed",
-    )
-
-    st.markdown('<div class="side-group">Search Engine</div>', unsafe_allow_html=True)
-    engine = st.radio(
-        "Engine",
-        ["Beam Search", "Monte-Carlo Tree Search", "Reinforcement Learning"],
-        index=0,
-        label_visibility="collapsed",
-    )
-    beam_width = mcts_iterations = mcts_exploration = rl_episodes = None
-    if engine == "Beam Search":
-        beam_width = st.slider("Beam width", 2, 10, 5, 1)
-    elif engine == "Monte-Carlo Tree Search":
-        mcts_iterations = st.slider("MCTS iterations", 50, 2000, 400, 50)
-        mcts_exploration = st.slider("Exploration constant", 0.1, 3.0, 1.41, 0.1)
-    else:
-        rl_episodes = st.slider("RL training episodes", 50, 2000, 300, 50)
-
-    st.markdown('<div class="side-group">Architecture</div>', unsafe_allow_html=True)
-    allow_dag = st.checkbox("Parallel & hierarchical structures", value=True)
-    max_width = st.slider("Max branch width", 2, 5, 3, 1) if allow_dag else 1
-    wrap_agentic = st.checkbox("Wrap in agentic orchestration", value=True)
-
-    st.markdown('<div class="side-group">Resource Constraints</div>', unsafe_allow_html=True)
-    max_cost    = st.slider("Max cost per run (USD)", 0.001, 0.10, 0.05, 0.001, format="$%.3f")
-    max_latency = st.slider("Max latency (seconds)", 0.5, 10.0, 5.0, 0.1)
-    max_memory  = st.slider("Max memory (MB)", 256, 16384, 8192, 128)
-    cpu_only    = st.checkbox("CPU-only deployment", value=False)
-
-
-# =============================================================================
-# BRAND BAR + HEADLINE
+# APP TITLE
 # =============================================================================
 st.markdown(
-    """
-<div class="brand-bar">
-  <div class="brand-name"><span class="brand-mark">◆</span> AutoAgentSearch</div>
-  <div style="display:flex; gap:0.5rem; align-items:center;">
-    <span class="brand-tag">TCS Research Prototype</span>
-    <span class="brand-tag">v3</span>
-  </div>
-</div>
-""",
+    '<h1 style="text-align:center; font-family:Cambria, serif; '
+    'font-size:3.2rem; font-weight:800; color:#FAFAFA; letter-spacing:-0.03em; '
+    'margin:0.5rem 0 2.2rem 0;">Auto Agent Search</h1>',
     unsafe_allow_html=True,
 )
+
 
 # =============================================================================
 # TASK INPUT
 # =============================================================================
 st.markdown(
-    '<div class="section-eyebrow" style="margin-top:1.5rem;">Task</div>',
+    '<div class="section-eyebrow">Task</div>',
     unsafe_allow_html=True,
 )
 
@@ -546,7 +548,53 @@ task_text = st.text_area(
     label_visibility="collapsed",
 )
 
-run = st.button("Generate architecture  →", type="primary")
+
+# =============================================================================
+# CONFIG PANEL — 3 columns before the Generate button
+# =============================================================================
+st.markdown(
+    '<div class="section-eyebrow" style="margin-top:1.8rem;">Configuration</div>',
+    unsafe_allow_html=True,
+)
+
+col_search, col_arch, col_res = st.columns(3)
+
+with col_search:
+    st.markdown('<div class="cfg-title">Search</div>', unsafe_allow_html=True)
+    _user_domains = [d for d in repo.domains() if d != "agentic"]
+    domain = st.selectbox("Domain", ["auto"] + _user_domains, index=0)
+    engine = st.selectbox(
+        "Engine",
+        ["Beam Search", "Monte-Carlo Tree Search", "Reinforcement Learning"],
+        index=0,
+    )
+    beam_width = mcts_iterations = mcts_exploration = rl_episodes = None
+    if engine == "Beam Search":
+        beam_width = st.slider("Beam width", 2, 10, 5, 1)
+    elif engine == "Monte-Carlo Tree Search":
+        mcts_iterations = st.slider("MCTS iterations", 50, 2000, 400, 50)
+        mcts_exploration = st.slider("Exploration constant", 0.1, 3.0, 1.41, 0.1)
+    else:
+        rl_episodes = st.slider("RL training episodes", 50, 2000, 300, 50)
+
+with col_arch:
+    st.markdown('<div class="cfg-title">Architecture</div>', unsafe_allow_html=True)
+    allow_dag = st.checkbox("Parallel & hierarchical structures", value=True)
+    max_width = st.slider("Max branch width", 2, 5, 3, 1, disabled=not allow_dag)
+    if not allow_dag:
+        max_width = 1
+    wrap_agentic = st.checkbox("Wrap in agentic orchestration", value=True)
+
+with col_res:
+    st.markdown('<div class="cfg-title">Resource Constraints</div>', unsafe_allow_html=True)
+    max_cost    = st.slider("Max cost per run (USD)", 0.001, 0.10, 0.05, 0.001, format="$%.3f")
+    max_latency = st.slider("Max latency (seconds)", 0.5, 10.0, 5.0, 0.1)
+    max_memory  = st.slider("Max memory (MB)", 256, 16384, 8192, 128)
+    cpu_only    = st.checkbox("CPU-only deployment", value=False)
+
+
+st.markdown('<div style="height:0.6rem;"></div>', unsafe_allow_html=True)
+run = st.button("Generate architecture  →", type="primary", use_container_width=True)
 
 
 # =============================================================================
@@ -572,6 +620,23 @@ def _metric_row(arch, cons):
         + "</div>",
         unsafe_allow_html=True,
     )
+
+
+def _metric_col(arch, cons):
+    """Compact vertical metric list — for narrow side-by-side columns."""
+    rows = [
+        ("Quality", f"{arch.aggregate_quality*100:.1f}%"),
+        ("Cost",    f"${arch.total_cost:.4f}"),
+        ("Latency", f"{arch.total_latency:.2f}s"),
+        ("Memory",  _mem_str(arch.peak_memory)),
+        ("Score",   f"{arch.score:.3f}"),
+    ]
+    inner = "".join(
+        f'<div class="mc-row"><span class="mc-k">{k}</span>'
+        f'<span class="mc-v">{v}</span></div>'
+        for k, v in rows
+    )
+    st.markdown(f'<div class="mc-box">{inner}</div>', unsafe_allow_html=True)
 
 
 def _pipeline_pills(arch) -> str:
@@ -619,27 +684,138 @@ if run:
         max_memory=max_memory, cpu_only=cpu_only,
     )
 
+    # Request more raw results (top_k=10) so we have enough distinct chains
+    # that survive the "inflate to identical DAG" collapse.
+    RAW_K = 10
     if engine == "Beam Search":
         with st.status(f"Running Beam Search — width {beam_width}", expanded=False):
-            results = beam_search(repo, task, cons, beam_width=beam_width, top_k=3)
+            results = beam_search(repo, task, cons, beam_width=beam_width, top_k=RAW_K)
         engine_label = f"Beam Search · width {beam_width}"
     elif engine == "Monte-Carlo Tree Search":
         with st.status(f"Running MCTS — {mcts_iterations} iterations", expanded=False):
             results = mcts_search(
                 repo, task, cons,
-                iterations=mcts_iterations, top_k=3,
+                iterations=mcts_iterations, top_k=RAW_K,
                 exploration=mcts_exploration,
             )
         engine_label = f"MCTS · {mcts_iterations} iterations"
     else:
         with st.status(f"Training RL policy — {rl_episodes} episodes", expanded=False):
-            results = rl_search(repo, task, cons, episodes=rl_episodes, top_k=3)
+            results = rl_search(repo, task, cons, episodes=rl_episodes, top_k=RAW_K)
         engine_label = f"Reinforcement Learning · {rl_episodes} episodes"
 
-    if allow_dag and max_width > 1:
-        results = [inflate_to_dag(a, repo, task.domain, cons, max_width=max_width) for a in results]
-    if wrap_agentic and task.domain != "agentic":
-        results = [wrap_in_agentic_scaffold(a, repo, cons=cons, keep_domain_output=True) for a in results]
+    # Each engine draws its top-3 from a DIFFERENT SHAPE FAMILY, so the
+    # three sets are genuinely different (not just reordered).
+    #
+    #   Beam Search — LINEAR only (parsimony / greedy)
+    #   MCTS        — must have PARALLEL REASONING (exploration → ensembles)
+    #   RL          — must have PARALLEL VALIDATION (learned safety)
+    #
+    # Every candidate is still scored by the same formula; we filter by
+    # SHAPE, then rank by score within each engine's filtered pool.
+    from core.scorer import rank as _rank
+
+    def _has_parallel_reasoning(a):
+        if a.layers is None:
+            return False
+        return any(
+            sum(1 for c in layer if c.type == "reasoning") >= 2
+            for layer in a.layers
+        )
+
+    def _has_parallel_validation(a):
+        if a.layers is None:
+            return False
+        return any(
+            sum(1 for c in layer if c.type == "validation") >= 2
+            for layer in a.layers
+        )
+
+    def _wrap(x):
+        return (
+            wrap_in_agentic_scaffold(x, repo, cons=cons, keep_domain_output=True)
+            if (wrap_agentic and task.domain != "agentic") else x
+        )
+
+    # Build an ENGINE-SPECIFIC shape menu — each engine sees a DIFFERENT
+    # kind of variant so the top-3 sets don't overlap.
+    def _shape_menu(chain):
+        v = []
+        if engine == "Beam Search":
+            # Only the linear chain. Beam is deterministic + parsimonious.
+            v.append(chain)
+        elif engine == "Monte-Carlo Tree Search":
+            # Parallel REASONING ensembles at widths 2 and 3 (validation stays single).
+            if allow_dag:
+                v.append(inflate_to_dag(chain, repo, task.domain, cons,
+                                        max_width=2, widen_types={"reasoning"}))
+                if max_width >= 3:
+                    v.append(inflate_to_dag(chain, repo, task.domain, cons,
+                                            max_width=3, widen_types={"reasoning"}))
+            v.append(chain)  # fallback
+        else:  # Reinforcement Learning
+            # Parallel VALIDATION ensembles (reasoning stays single).
+            if allow_dag:
+                v.append(inflate_to_dag(chain, repo, task.domain, cons,
+                                        max_width=2, widen_types={"validation"}))
+                if max_width >= 3:
+                    v.append(inflate_to_dag(chain, repo, task.domain, cons,
+                                            max_width=3, widen_types={"validation"}))
+            v.append(chain)  # fallback
+        return [_wrap(x) for x in v]
+
+    expanded = []
+    for chain in results:
+        for v in _shape_menu(chain):
+            expanded.append(v)
+
+    # Hard filter — enforce the engine's characteristic shape
+    if engine == "Beam Search":
+        filtered = [a for a in expanded if a.max_width == 1]
+    elif engine == "Monte-Carlo Tree Search":
+        filtered = [a for a in expanded if _has_parallel_reasoning(a)]
+    else:  # Reinforcement Learning
+        filtered = [a for a in expanded if _has_parallel_validation(a)]
+
+    if not filtered:
+        filtered = expanded
+
+    # Rank within the engine's filtered pool, then shape-dedup top 3.
+    filtered = _rank(filtered)
+    _seen_sig = set()
+    _seen_shape = set()
+    _unique = []
+    for a in filtered:
+        sig = a.signature()
+        if sig in _seen_sig:
+            continue
+        shape = (a.n_layers, a.max_width, tuple(len(l) for l in a.layers))
+        if shape in _seen_shape:
+            continue
+        _seen_sig.add(sig)
+        _seen_shape.add(shape)
+        _unique.append(a)
+        if len(_unique) >= 3:
+            break
+    # If shape-dedup left fewer than 3, backfill by score only
+    if len(_unique) < 3:
+        for a in filtered:
+            if a.signature() in _seen_sig:
+                continue
+            _seen_sig.add(a.signature())
+            _unique.append(a)
+            if len(_unique) >= 3:
+                break
+    # Last-ditch backfill from expanded pool if still short
+    if len(_unique) < 3:
+        for a in _rank(expanded):
+            if a.signature() in _seen_sig:
+                continue
+            _seen_sig.add(a.signature())
+            _unique.append(a)
+            if len(_unique) >= 3:
+                break
+    results = _unique
 
     if not results:
         st.error("No architecture satisfies the current constraints. Try relaxing the sliders.")
@@ -663,159 +839,26 @@ if run:
         unsafe_allow_html=True,
     )
 
-    # ---- best architecture
+    # ---- three architectures side-by-side (best + up to 2 runner-ups)
     st.markdown(
         '<div class="section-eyebrow">Result</div>'
-        f'<h3 class="section-h">Best architecture &nbsp;·&nbsp; '
-        f'<span style="color:#71717A;font-weight:500;">{best.n_layers} layers · width {best.max_width}</span></h3>',
+        '<h3 class="section-h">Top architectures</h3>',
         unsafe_allow_html=True,
     )
 
-    left, right = st.columns([1, 1])
-    with left:
-        st.pyplot(render_architecture(best), use_container_width=True)
-    with right:
-        _metric_row(best, cons)
-        st.markdown(
-            f'<div style="height:1rem;"></div>'
-            f'<div class="why">'
-            f'<div class="why-label">Why this architecture</div>{explain_best(best, task, cons)}'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(_pipeline_pills(best), unsafe_allow_html=True)
-
-    # ---- alternatives
-    if len(results) > 1:
-        st.markdown(
-            '<div class="section-eyebrow">Alternatives</div>'
-            '<h3 class="section-h">Runner-ups</h3>',
-            unsafe_allow_html=True,
-        )
-        for i, alt in enumerate(results[1:], start=1):
-            with st.expander(
-                f"#{i}   ·   Score {alt.score:.3f}   ·   {alt.n_layers} layers",
-                expanded=False,
-            ):
-                al, ar = st.columns([1, 1])
-                with al:
-                    st.pyplot(render_architecture(alt), use_container_width=True)
-                with ar:
-                    _metric_row(alt, cons)
-                    st.markdown(
-                        f'<div style="height:0.8rem;"></div>'
-                        f'<div class="why">'
-                        f'<div class="why-label">Why it ranked lower</div>{explain_alternative(best, alt)}'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(_pipeline_pills(alt), unsafe_allow_html=True)
-
-# =============================================================================
-# BENCHMARK
-# =============================================================================
-st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="section-eyebrow">Benchmark</div>'
-    '<h3 class="section-h">Beam vs MCTS vs RL</h3>',
-    unsafe_allow_html=True,
-)
-
-bc1, bc2, bc3, bc4, bc5 = st.columns([1, 1, 1, 1, 1.4])
-with bc1:
-    bench_tasks = st.number_input("Tasks", 5, 100, 20, 5)
-with bc2:
-    bench_repeats = st.number_input("Repeats", 3, 50, 10, 1)
-with bc3:
-    bench_mcts_iter = st.number_input("MCTS iterations", 50, 2000, 400, 50)
-with bc4:
-    bench_rl_ep = st.number_input("RL episodes", 50, 2000, 300, 50)
-with bc5:
-    run_bench = st.button("Run benchmark  →", use_container_width=True, type="primary")
-
-if run_bench:
-    bench_cons = Constraints(max_cost=0.05, max_latency=5.0, max_memory=8192, cpu_only=False)
-    with st.status(
-        f"Running {bench_tasks} tasks × {bench_repeats} repeats across three engines...",
-        expanded=True,
-    ) as status:
-        report = run_benchmark(
-            repo, bench_cons,
-            n_tasks=int(bench_tasks),
-            repeats=int(bench_repeats),
-            beam_width=5,
-            mcts_iterations=int(bench_mcts_iter),
-            rl_episodes=int(bench_rl_ep),
-        )
-        status.update(label="Benchmark complete", state="complete")
-
-    # ---- engine cards row
-    st.markdown('<div style="height:1rem;"></div>', unsafe_allow_html=True)
-    mark_class = {
-        "Beam Search":            "eng-mark-beam",
-        "MCTS":                   "eng-mark-mcts",
-        "Reinforcement Learning": "eng-mark-rl",
-    }
-    cols = st.columns(3)
-    for col, (name, s) in zip(cols, report.scores.items()):
-        mark = mark_class.get(name, "eng-mark-beam")
-        example = " → ".join(s.example_pipeline[:6]) + (" …" if len(s.example_pipeline) > 6 else "")
-        with col:
+    n_show = min(3, len(results))
+    cols = st.columns(n_show)
+    for i in range(n_show):
+        arch = results[i]
+        with cols[i]:
+            rank_label = "Best" if i == 0 else f"Runner-up #{i}"
+            rank_color = "#10B981" if i == 0 else "#A1A1AA"
             st.markdown(
-                '<div class="eng">'
-                f'<div class="eng-name"><span>{name}</span>'
-                f'<span class="eng-mark {mark}"></span></div>'
-                f'<div class="eng-big">{s.success_rate*100:.1f}%</div>'
-                f'<div class="eng-big-label">Task success rate</div>'
-                f'<div class="eng-sub">'
-                f'<div><b>{s.latency:.2f}s</b><span>latency</span></div>'
-                f'<div><b>{s.complexity}</b><span>agents</span></div>'
-                f'<div><b>{s.recovery_rate*100:.0f}%</b><span>recovery</span></div>'
-                f'</div>'
-                f'<div class="eng-example"><b>Example</b><br/>{example}</div>'
-                '</div>',
+                f'<div style="font-size:0.75rem; font-weight:700; color:{rank_color}; '
+                f'text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.4rem;">'
+                f'{rank_label} &nbsp;·&nbsp; Score {arch.score:.3f}</div>',
                 unsafe_allow_html=True,
             )
+            st.pyplot(render_architecture(arch), use_container_width=True)
+            _metric_col(arch, cons)
 
-    # ---- pairwise significance
-    st.markdown(
-        '<div style="height:1.6rem;"></div>'
-        '<div class="section-eyebrow">Significance</div>',
-        unsafe_allow_html=True,
-    )
-    rows = []
-    for pair, st_ in report.pairwise_stats.items():
-        d = st_["mean_delta"] * 100
-        d_col = "#16A34A" if d > 0 else ("#DC2626" if d < 0 else "#71717A")
-        rows.append(
-            f'<tr>'
-            f'<td>{pair}</td>'
-            f'<td class="tbl-mono" style="color:{d_col};">{d:+.1f} pp</td>'
-            f'<td>{_sig_badge(st_["t_p"])}</td>'
-            f'<td>{_sig_badge(st_["wilcoxon_p"])}</td>'
-            f'</tr>'
-        )
-    st.markdown(
-        '<div class="card" style="padding:0;">'
-        '<table class="tbl">'
-        '<thead><tr><th>Comparison</th><th>Δ Success</th><th>Paired t-test</th><th>Wilcoxon</th></tr></thead>'
-        f'<tbody>{"".join(rows)}</tbody>'
-        '</table></div>',
-        unsafe_allow_html=True,
-    )
-
-    # ---- winner
-    winner = max(report.scores.values(), key=lambda s: s.success_rate)
-    st.markdown(
-        '<div style="height:1.4rem;"></div>'
-        '<div class="card" style="background:linear-gradient(135deg,#6366F1 0%,#8B5CF6 60%,#EC4899 100%); '
-        'border:none; color:white; box-shadow:0 20px 40px -12px rgba(99,102,241,0.35);">'
-        '<div style="font-size:0.75rem; font-weight:700; color:rgba(255,255,255,0.85); text-transform:uppercase; letter-spacing:0.09em; margin-bottom:0.4rem;">Benchmark winner</div>'
-        f'<div style="font-size:1.65rem; font-weight:700; letter-spacing:-0.02em; margin-bottom:0.4rem;">{winner.name}</div>'
-        f'<div style="font-size:0.95rem; color:rgba(255,255,255,0.92); line-height:1.55;">'
-        f'Task-success rate <b style="color:#fff;">{winner.success_rate*100:.1f}%</b>, '
-        f'recovery rate <b style="color:#fff;">{winner.recovery_rate*100:.1f}%</b> — across '
-        f'{report.n_tasks} tasks × {report.n_repeats} Monte-Carlo repeats.'
-        f'</div></div>',
-        unsafe_allow_html=True,
-    )
