@@ -15,7 +15,9 @@ Design decisions:
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+import base64
+import io
+from typing import Dict, Tuple
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Rectangle
@@ -65,15 +67,14 @@ def _layer_positions(arch: Architecture) -> Dict[Tuple[int, int], Tuple[float, f
     else:
         layers = [[c] for c in arch.components]
 
-    n_layers = len(layers)
     for li, layer in enumerate(layers):
-        y = -li * 1.6      # vertical spacing between layers
+        y = -li * 0.85     # very tight vertical spacing between layers
         width = len(layer)
         # Spread nodes horizontally within the layer.
         if width == 1:
             xs = [0.0]
         else:
-            span = 2.6 * (width - 1) / 2
+            span = 1.9 * (width - 1) / 2
             xs = [-span + i * (span * 2 / (width - 1)) for i in range(width)]
         for xi, _ in enumerate(layer):
             positions[(li, xi)] = (xs[xi], y)
@@ -86,19 +87,19 @@ def _draw_node(ax, x, y, w, h, label: str, stripe_color: str) -> None:
     body = FancyBboxPatch(
         (x - w / 2, y - h / 2),
         w, h,
-        boxstyle="round,pad=0,rounding_size=0.10",
+        boxstyle="round,pad=0,rounding_size=0.08",
         facecolor=_NODE_FILL,
         edgecolor=_NODE_BORDER,
-        linewidth=1.1,
+        linewidth=1.0,
         zorder=2,
     )
     ax.add_patch(body)
     # Coloured left stripe — plain rectangle so it stays as a clean bar
     # (a FancyBboxPatch with rounding on such a thin shape renders as an oval)
-    stripe_w = 0.08
+    stripe_w = 0.06
     stripe = Rectangle(
-        (x - w / 2 + 0.015, y - h / 2 + 0.08),
-        stripe_w, h - 0.16,
+        (x - w / 2 + 0.012, y - h / 2 + 0.06),
+        stripe_w, h - 0.12,
         facecolor=stripe_color,
         edgecolor="none",
         zorder=3,
@@ -106,10 +107,10 @@ def _draw_node(ax, x, y, w, h, label: str, stripe_color: str) -> None:
     ax.add_patch(stripe)
     # Label — centered accounting for the stripe on the left
     ax.text(
-        x + stripe_w / 2 + 0.03, y,
-        _wrap(label, width=18),
+        x + stripe_w / 2 + 0.02, y,
+        _wrap(label, width=16),
         ha="center", va="center",
-        fontsize=9, color=_TEXT_COLOR, fontweight="normal",
+        fontsize=7.5, color=_TEXT_COLOR, fontweight="normal",
         family="sans-serif",
         zorder=4,
     )
@@ -139,8 +140,8 @@ def _draw_arrow(ax, x1, y1, x2, y2, node_w: float, node_h: float) -> None:
     arrow = FancyArrowPatch(
         (sx, sy), (ex, ey),
         arrowstyle="-|>",
-        mutation_scale=18,
-        color=_ARROW_COLOR, linewidth=1.3,
+        mutation_scale=12,
+        color=_ARROW_COLOR, linewidth=1.0,
         shrinkA=0, shrinkB=0,
         zorder=1,
     )
@@ -148,25 +149,28 @@ def _draw_arrow(ax, x1, y1, x2, y2, node_w: float, node_h: float) -> None:
 
 
 # ------------------------------------------------------------------ main
-def render_architecture(arch: Architecture, figsize=(7.5, None)):
-    """Return a Matplotlib Figure showing the workflow top-to-bottom."""
+def render_architecture(arch: Architecture, figsize=(5.4, None)):
+    """Return a compact Matplotlib Figure of the workflow, top-to-bottom.
+
+    The figure is intentionally short and narrow so three architectures
+    fit side-by-side inside a laptop viewport without vertical scrolling.
+    """
     if arch.layers is not None:
         layers = arch.layers
     else:
         layers = [[c] for c in arch.components]
 
     n_layers = len(layers)
-    max_width = max((len(l) for l in layers), default=1)
 
-    # Dynamic figure height based on layer count.
-    fig_h = figsize[1] if figsize[1] is not None else max(4.2, 1.05 * n_layers + 0.8)
+    # Compact height — scales with layer count but starts small.
+    fig_h = figsize[1] if figsize[1] is not None else max(2.6, 0.60 * n_layers + 0.4)
     fig_w = figsize[0]
     fig, ax = plt.subplots(figsize=(fig_w, fig_h), facecolor=_BG_COLOR)
     ax.set_facecolor(_BG_COLOR)
 
     positions = _layer_positions(arch)
-    node_w = 2.05
-    node_h = 0.72
+    node_w = 1.55
+    node_h = 0.52
 
     # Draw arrows first (behind nodes)
     for li in range(n_layers - 1):
@@ -183,15 +187,31 @@ def render_architecture(arch: Architecture, figsize=(7.5, None)):
             stripe = _TYPE_STRIPE.get(comp.type, "#71717A")
             _draw_node(ax, x, y, node_w, node_h, comp.name, stripe)
 
-    # Compute limits with padding
+    # Compute limits with tight padding
     all_x = [p[0] for p in positions.values()]
     all_y = [p[1] for p in positions.values()]
-    pad_x = 2.0
-    pad_y = 1.2
+    pad_x = 1.1
+    pad_y = 0.6
     ax.set_xlim(min(all_x) - pad_x, max(all_x) + pad_x)
     ax.set_ylim(min(all_y) - pad_y, max(all_y) + pad_y)
     ax.set_aspect("equal")
     ax.set_axis_off()
 
-    fig.tight_layout(pad=0.4)
+    fig.tight_layout(pad=0.2)
     return fig
+
+
+def render_architecture_data_url(arch: Architecture, dpi: int = 180) -> str:
+    """Render the architecture to a base64 PNG data URL.
+
+    Use this when the graph must be embedded in an HTML container that
+    caps its height with CSS (max-height: 45vh) — Streamlit's st.pyplot
+    only bounds width, not height, so tall DAGs otherwise force a scroll.
+    """
+    fig = render_architecture(arch)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=dpi, facecolor=fig.get_facecolor(),
+                bbox_inches="tight", pad_inches=0.05)
+    plt.close(fig)
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{b64}"

@@ -13,7 +13,7 @@ type-compatible, no redundant no-op stages, ends at a proper output.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from .models import Architecture, Component, Constraints
 from .repository import ComponentRepository
@@ -100,6 +100,9 @@ def wrap_in_agentic_scaffold(
     wrapped.append([verifier])         # plan-level check
     wrapped.extend(base_layers)        # ---- domain body (unchanged) ----
     wrapped.append([recovery])         # error handling & retry
+    # Terminal layer: prefer the domain's own output when we're told to
+    # keep it, otherwise fall back to the agentic Status Report if the
+    # library ships one, otherwise keep whatever tail the domain had.
     if keep_domain_output and domain_output_layer is not None:
         wrapped.append(domain_output_layer)
     elif status is not None:

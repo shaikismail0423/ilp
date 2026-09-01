@@ -106,16 +106,8 @@ class Architecture:
 
     # ------------------------------------------------------------ helpers
     @property
-    def is_dag(self) -> bool:
-        """True if any layer has more than one component (real parallelism)."""
-        return self.layers is not None and any(len(layer) > 1 for layer in self.layers)
-
-    @property
-    def n_layers(self) -> int:
-        return len(self.layers) if self.layers is not None else len(self.components)
-
-    @property
     def max_width(self) -> int:
+        """Widest parallel layer in the architecture. Linear chains are 1."""
         if self.layers is None:
             return 1
         return max((len(layer) for layer in self.layers), default=0)
@@ -137,8 +129,3 @@ class Architecture:
             "+".join(sorted(c.id for c in layer))
             for layer in self.layers
         )
-
-    def last_output(self) -> Optional[str]:
-        if self.layers is not None and self.layers:
-            return self.layers[-1][-1].output
-        return self.components[-1].output if self.components else None

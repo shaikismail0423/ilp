@@ -29,7 +29,7 @@ widened without breaking the budget is simply left as-is.
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+from typing import List, Optional
 
 from .models import Architecture, Component, Constraints
 from .repository import ComponentRepository
@@ -87,15 +87,20 @@ def inflate_to_dag(
     max_width
         Maximum number of components in any one parallel layer.
     enable_hierarchy
-        If True, when a reasoning stage is widened *and* a validation stage
-        exists downstream, the validator is also widened to form a hierarchy
-        (parallel reasoning → aggregator → parallel validation → aggregator).
+        If True, validation stages may also be widened into a validator
+        ensemble (a common enterprise pattern — multiple compliance
+        checks running in parallel). If False, only retrieval and
+        reasoning stages are widened.
+    widen_types
+        Optional subset of parallelisable types to actually widen. If
+        ``None`` (default), all of ``{retrieval, reasoning, validation}``
+        may be widened. Passing e.g. ``{"reasoning"}`` restricts widening
+        to reasoning stages only.
     """
     if not chain.components:
         return chain
 
     layers: List[List[Component]] = [[c] for c in chain.components]
-    widened_reasoning = False
 
     # Snapshot the original components — we walk the pipeline in its
     # original order, looking up each component's *current* index in the
@@ -160,8 +165,6 @@ def inflate_to_dag(
 
         if satisfies_constraints(trial, cons):
             layers = candidate
-            if comp.type == "reasoning":
-                widened_reasoning = True
 
     inflated = Architecture.from_layers(layers)
     compute_metrics(inflated)

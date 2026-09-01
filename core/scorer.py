@@ -100,5 +100,11 @@ def satisfies_constraints(arch: Architecture, cons: Constraints) -> bool:
 
 
 def rank(archs: List[Architecture]) -> List[Architecture]:
-    """Return archs sorted from best (highest score) to worst."""
+    """Return archs sorted from best (highest score) to worst.
+
+    Precondition: every architecture has already been scored (i.e.
+    :func:`compute_metrics` was called on it). Search engines and the DAG
+    inflater always score before ranking; if you rank a batch you built by
+    hand, call :func:`compute_metrics` on each entry first.
+    """
     return sorted(archs, key=lambda a: a.score, reverse=True)

@@ -44,6 +44,3 @@ class ComponentRepository:
 
     def by_type(self, domain: str, type_: str) -> List[Component]:
         return [c for c in self.get(domain) if c.type == type_]
-
-    def by_input(self, domain: str, input_type: str) -> List[Component]:
-        return [c for c in self.get(domain) if c.input == input_type]

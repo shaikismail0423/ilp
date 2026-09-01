@@ -172,8 +172,6 @@ def simulate_pipeline(
         - ``"resource_shortage"``: halves the executor's success probability.
     """
     rng = random.Random(seed)
-    original_difficulty = task.difficulty
-    original_nodes = list(task.nodes)
 
     if inject_failure == "missing_activity" and len(task.nodes) > 2:
         task = BPITask(
@@ -217,10 +215,6 @@ def simulate_pipeline(
         latency += comp.latency
         cost += comp.cost
         peak_memory = max(peak_memory, comp.memory)
-
-    # Restore task in case the caller reuses it.
-    task.difficulty = original_difficulty
-    task.nodes = original_nodes
 
     return RunResult(
         success=state.executed and (arch.components[-1].type == "output"),

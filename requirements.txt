@@ -1,6 +1,9 @@
 streamlit>=1.30.0
-networkx>=3.1
 matplotlib>=3.7.0
-# Optional but recommended - the benchmark's t-test / Wilcoxon test falls
-# back to pure-Python implementations when scipy is missing.
+
+# Optional — used only by core/benchmark.py (run via demo.py / run_benchmark.py).
+# When missing, the benchmark falls back to pure-Python t-test / Wilcoxon.
 scipy>=1.10.0
+
+# Optional — used only by demo.py for its comparison tables.
+pandas>=2.0.0
